@@ -1,0 +1,60 @@
+management:
+  tracing:
+    sampling:
+      probability: 0.0
+    baggage:
+      correlation:
+        fields:
+          - messageId
+          - x-message-id
+      remote-fields: messageId,x-message-id
+  endpoints:
+    web:
+      exposure:
+        include: health, metrics, loggers
+      base-path: /
+      path-mapping:
+        health: actuator/health
+        metrics: actuator/metrics
+        loggers: resilient-api/actuator/loggers
+  endpoint:
+    health:
+      probes:
+        enabled: false
+      show-details: "always"
+  health:
+    circuitbreakers:
+      enabled: true
+    diskspace:
+      enabled: false
+    r2dbc:
+      enabled: true
+    ping:
+      enabled: false
+    refresh:
+      enabled: false
+resilience4j.circuitbreaker:
+  circuit-breaker-aspect-order: 1
+  configs:
+    default:
+      register-health-indicator: true
+resilience4j:
+  retry:
+    configs:
+      default:
+        maxAttempts: 3
+        waitDuration: 2000ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2.0
+        maxWaitDuration: 10000ms  # Duración máxima del backoff
+        initialInterval: 500ms    # Intervalo inicial para el backoff
+  bulkhead:
+    configs:
+      default:
+        maxConcurrentCalls: 10
+        maxWaitDuration: 500ms
+
+external:
+  technology:
+    base-url: ${BASE_URL_TECH:http://localhost:8081}
+
