@@ -7,7 +7,7 @@ import lombok.Setter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Table;
 
-@Table(name = "capacities")
+@Table(name = "capacity")
 @Getter
 @Setter
 @NoArgsConstructor

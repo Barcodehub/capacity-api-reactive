@@ -93,7 +93,7 @@ public class CapacityUseCase implements CapacityServicePort {
             List<Capacity> capacities, String messageId) {
 
         return reactor.core.publisher.Flux.fromIterable(capacities)
-                .flatMap(capacity ->
+                .concatMap(capacity ->
                     capacityPersistencePort.findTechnologyIdsByCapacityId(capacity.id())
                             .collectList()
                             .flatMap(techIds -> {
