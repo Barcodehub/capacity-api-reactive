@@ -93,4 +93,35 @@ public class TechnologyWebClient {
                     return Flux.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
                 });
     }
+
+    public Mono<Void> notifyTechnologyReferencesDecrement(List<Long> technologyIds, String messageId) {
+        log.info("Calling technology service to notify technology references decrement with messageId: {}", messageId);
+
+        return webClientBuilder.build()
+                .post()
+                .uri(technologyBaseUrl + "/technology/decrement-references")
+                .header(X_MESSAGE_ID, messageId)
+                .bodyValue(new TechnologyIdsRequest(technologyIds))
+                .retrieve()
+                .onStatus(status -> status.is5xxServerError(),
+                    response -> {
+                        log.error("Technology service returned 5xx error for messageId: {}", messageId);
+                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                    })
+                .onStatus(status -> status.is4xxClientError(),
+                    response -> {
+                        log.error("Technology service returned 4xx error for messageId: {}", messageId);
+                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                    })
+                .bodyToMono(Void.class)
+                .doOnSuccess(v -> log.info("Successfully notified technology service about reference decrement with messageId: {}", messageId))
+                .doOnError(ex -> log.error("Error calling technology service for messageId: {}", messageId, ex))
+                .onErrorResume(ex -> {
+                    if (ex instanceof TechnicalException) {
+                        return Mono.error(ex);
+                    }
+                    log.error("Unexpected error calling technology service for messageId: {}", messageId, ex);
+                    return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                });
+    }
 }

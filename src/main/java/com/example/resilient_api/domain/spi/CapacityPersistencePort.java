@@ -14,5 +14,9 @@ public interface CapacityPersistencePort {
     Flux<Capacity> findAllPaginated(PaginationRequest paginationRequest);
     Mono<Long> count();
     Flux<Long> findTechnologyIdsByCapacityId(Long capacityId);
+    Flux<Capacity> findAllByIdIn(List<Long> ids);
+    Mono<Long> countTechnologyReferences(Long technologyId);
+    Mono<Void> deleteById(Long id);
+    Mono<Void> deleteCapacityTechnologiesByCapacityId(Long capacityId);
 }
 

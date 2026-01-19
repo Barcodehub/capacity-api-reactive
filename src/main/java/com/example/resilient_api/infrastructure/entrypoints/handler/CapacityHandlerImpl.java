@@ -123,6 +123,53 @@ public class CapacityHandlerImpl {
                 .onErrorResume(ex -> handleUnexpectedException(ex, messageId));
     }
 
+    public Mono<ServerResponse> getCapacitiesWithTechnologies(ServerRequest request) {
+        String messageId = getMessageId(request);
+        return request.bodyToMono(CapacityIdsRequest.class)
+                .flatMap(idsRequest -> {
+                    List<Long> ids = idsRequest.getIds() != null ? idsRequest.getIds() : List.of();
+                    return capacityServicePort.getCapacitiesWithTechnologies(ids, messageId)
+                            .collectList()
+                            .doOnSuccess(result -> log.info("Capacities with technologies retrieved successfully with messageId: {}", messageId));
+                })
+                .flatMap(capacities -> {
+                    // Mapear a DTO
+                    List<CapacityWithTechnologiesDTO> dtos = capacities.stream()
+                            .map(capacity -> CapacityWithTechnologiesDTO.builder()
+                                    .id(capacity.id())
+                                    .name(capacity.name())
+                                    .description(capacity.description())
+                                    .technologies(capacity.technologies().stream()
+                                            .map(tech -> TechnologySummaryDTO.builder()
+                                                    .id(tech.id())
+                                                    .name(tech.name())
+                                                    .build())
+                                            .toList())
+                                    .build())
+                            .toList();
+                    return ServerResponse.status(HttpStatus.OK).bodyValue(dtos);
+                })
+                .contextWrite(Context.of(X_MESSAGE_ID, messageId))
+                .doOnError(ex -> log.error("Error getting capacities with technologies for messageId: {}", messageId, ex))
+                .onErrorResume(TechnicalException.class, ex -> handleTechnicalException(ex, messageId))
+                .onErrorResume(ex -> handleUnexpectedException(ex, messageId));
+    }
+
+    public Mono<ServerResponse> deleteCapacitiesByIds(ServerRequest request) {
+        String messageId = getMessageId(request);
+        return request.bodyToMono(CapacityIdsRequest.class)
+                .flatMap(idsRequest -> {
+                    List<Long> ids = idsRequest.getIds() != null ? idsRequest.getIds() : List.of();
+                    return capacityServicePort.deleteCapacitiesByIds(ids, messageId)
+                            .doOnSuccess(v -> log.info("Capacities deleted successfully with messageId: {}", messageId));
+                })
+                .flatMap(v -> ServerResponse.status(HttpStatus.OK).bodyValue("Capacities deleted successfully"))
+                .contextWrite(Context.of(X_MESSAGE_ID, messageId))
+                .doOnError(ex -> log.error("Error deleting capacities for messageId: {}", messageId, ex))
+                .onErrorResume(TechnicalException.class, ex -> handleTechnicalException(ex, messageId))
+                .onErrorResume(ex -> handleUnexpectedException(ex, messageId));
+    }
+
     private Mono<ServerResponse> handleBusinessException(BusinessException ex, String messageId) {
         return buildErrorResponse(
                 HttpStatus.BAD_REQUEST,

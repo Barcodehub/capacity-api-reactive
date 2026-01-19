@@ -10,5 +10,6 @@ import java.util.Map;
 public interface TechnologyExternalServicePort {
     Mono<Map<Long, Boolean>> checkTechnologiesExist(List<Long> technologyIds, String messageId);
     Flux<TechnologySummary> getTechnologiesByIds(List<Long> technologyIds, String messageId);
+    Mono<Void> notifyTechnologyReferencesDecrement(List<Long> technologyIds, String messageId);
 }
 

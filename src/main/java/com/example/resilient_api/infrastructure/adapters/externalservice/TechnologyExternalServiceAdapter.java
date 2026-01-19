@@ -24,5 +24,9 @@ public class TechnologyExternalServiceAdapter implements TechnologyExternalServi
     public Flux<TechnologySummary> getTechnologiesByIds(List<Long> technologyIds, String messageId) {
         return technologyWebClient.getTechnologiesByIds(technologyIds, messageId);
     }
-}
 
+    @Override
+    public Mono<Void> notifyTechnologyReferencesDecrement(List<Long> technologyIds, String messageId) {
+        return technologyWebClient.notifyTechnologyReferencesDecrement(technologyIds, messageId);
+    }
+}

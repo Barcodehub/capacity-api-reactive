@@ -89,6 +89,65 @@ public class CapacityUseCase implements CapacityServicePort {
                 });
     }
 
+    @Override
+    public reactor.core.publisher.Flux<CapacityWithTechnologies> getCapacitiesWithTechnologies(List<Long> ids, String messageId) {
+        if (ids == null || ids.isEmpty()) {
+            return reactor.core.publisher.Flux.empty();
+        }
+
+        return capacityPersistencePort.findAllByIdIn(ids)
+                .collectList()
+                .flatMapMany(capacities -> enrichCapacitiesWithTechnologies(capacities, messageId));
+    }
+
+    @Override
+    public Mono<Void> deleteCapacitiesByIds(List<Long> capacityIds, String messageId) {
+        if (capacityIds == null || capacityIds.isEmpty()) {
+            return Mono.empty();
+        }
+
+        // Para cada capacidad a eliminar
+        return reactor.core.publisher.Flux.fromIterable(capacityIds)
+                .concatMap(capacityId ->
+                    // Obtener tecnologías de esta capacidad
+                    capacityPersistencePort.findTechnologyIdsByCapacityId(capacityId)
+                            .collectList()
+                            .flatMap(techIds -> {
+                                if (!techIds.isEmpty()) {
+                                    // Para cada tecnología, verificar cuántas capacidades la referencian
+                                    return reactor.core.publisher.Flux.fromIterable(techIds)
+                                            .flatMap(techId ->
+                                                capacityPersistencePort.countTechnologyReferences(techId)
+                                                    .map(techCount -> new Object() {
+                                                        final Long id = techId;
+                                                        final Long refCount = techCount;
+                                                    })
+                                            )
+                                            .collectList()
+                                            .flatMap(techReferences -> {
+                                                // Filtrar tecnologías con solo 1 referencia para eliminar
+                                                List<Long> techsToDelete = techReferences.stream()
+                                                        .filter(ref -> ref.refCount <= 1)
+                                                        .map(ref -> ref.id)
+                                                        .toList();
+
+                                                // Eliminar capacity_technology y la capacidad
+                                                Mono<Void> deleteTechs = techsToDelete.isEmpty()
+                                                    ? Mono.empty()
+                                                    : technologyExternalServicePort.notifyTechnologyReferencesDecrement(techsToDelete, messageId);
+
+                                                return capacityPersistencePort.deleteCapacityTechnologiesByCapacityId(capacityId)
+                                                        .then(capacityPersistencePort.deleteById(capacityId))
+                                                        .then(deleteTechs);
+                                            });
+                                }
+                                // Si no tiene tecnologías, solo eliminar la capacidad
+                                return capacityPersistencePort.deleteById(capacityId);
+                            })
+                )
+                .then();
+    }
+
     private reactor.core.publisher.Flux<CapacityWithTechnologies> enrichCapacitiesWithTechnologies(
             List<Capacity> capacities, String messageId) {
 

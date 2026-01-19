@@ -100,6 +100,43 @@ public class CapacityPersistenceAdapter implements CapacityPersistencePort {
                 .map(CapacityTechnologyEntity::getTechnologyId);
     }
 
+    @Override
+    public Flux<Capacity> findAllByIdIn(List<Long> ids) {
+        return capacityRepository.findAllByIdIn(ids)
+                .flatMap(entity ->
+                    findTechnologyIdsByCapacityId(entity.getId())
+                            .collectList()
+                            .map(techIds -> new Capacity(
+                                    entity.getId(),
+                                    entity.getName(),
+                                    entity.getDescription(),
+                                    techIds
+                            ))
+                );
+    }
+
+
+    @Override
+    public Mono<Void> deleteById(Long id) {
+        return capacityRepository.deleteById(id);
+    }
+
+    @Override
+    public Mono<Void> deleteCapacityTechnologiesByCapacityId(Long capacityId) {
+        return capacityTechnologyRepository.findAllByCapacityId(capacityId)
+                .flatMap(capacityTechnologyRepository::delete)
+                .then();
+    }
+
+    @Override
+    public Mono<Long> countTechnologyReferences(Long technologyId) {
+        String query = "SELECT COUNT(*) FROM capacity_technology WHERE technology_id = :technologyId";
+        return databaseClient.sql(query)
+                .bind("technologyId", technologyId)
+                .map(row -> row.get(0, Long.class))
+                .one();
+    }
+
     private String buildOrderByClause(PaginationRequest paginationRequest) {
         String direction = paginationRequest.sortDirection() == PaginationRequest.SortDirection.ASC ? "ASC" : "DESC";
 
@@ -121,4 +158,3 @@ public class CapacityPersistenceAdapter implements CapacityPersistencePort {
                 .then();
     }
 }
-

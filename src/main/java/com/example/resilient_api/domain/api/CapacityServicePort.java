@@ -4,6 +4,7 @@ import com.example.resilient_api.domain.model.Capacity;
 import com.example.resilient_api.domain.model.CapacityWithTechnologies;
 import com.example.resilient_api.domain.model.Page;
 import com.example.resilient_api.domain.model.PaginationRequest;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
@@ -13,5 +14,7 @@ public interface CapacityServicePort {
     Mono<Capacity> registerCapacity(Capacity capacity, String messageId);
     Mono<Map<Long, Boolean>> checkCapacitiesExist(List<Long> ids, String messageId);
     Mono<Page<CapacityWithTechnologies>> listCapacities(PaginationRequest paginationRequest, String messageId);
+    Flux<CapacityWithTechnologies> getCapacitiesWithTechnologies(List<Long> ids, String messageId);
+    Mono<Void> deleteCapacitiesByIds(List<Long> capacityIds, String messageId);
 }
 
