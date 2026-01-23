@@ -22,7 +22,11 @@ public enum TechnicalMessage {
     CAPACITY_TECHNOLOGIES_MAX("400", "Capacity cannot have more than 20 technologies", "technologyIds"),
     CAPACITY_TECHNOLOGIES_DUPLICATED("400", "Capacity cannot have duplicate technologies", "technologyIds"),
     TECHNOLOGIES_NOT_FOUND("400", "Some technologies do not exist", "technologyIds"),
-    TECHNOLOGY_SERVICE_ERROR("500", "Error communicating with technology service", "")
+    TECHNOLOGY_SERVICE_ERROR("500", "Error communicating with technology service", ""),
+    TOKEN_EXPIRED("401", "Token expired", ""),
+    TOKEN_INVALID("401", "Token invalid", ""),
+    TOKEN_REQUIRED("401", "Token required", ""),
+    UNAUTHORIZED_ACTION("403", "Unauthorized action", "");
     ;
 
     private final String code;

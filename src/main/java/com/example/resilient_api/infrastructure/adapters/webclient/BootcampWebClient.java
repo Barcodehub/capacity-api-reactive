@@ -4,6 +4,8 @@ import com.example.resilient_api.domain.exceptions.TechnicalException;
 import com.example.resilient_api.infrastructure.adapters.webclient.dto.BootcampDTO;
 import com.example.resilient_api.infrastructure.adapters.webclient.dto.BootcampWithCapacitiesDTO;
 import com.example.resilient_api.infrastructure.adapters.webclient.dto.PageResponse;
+import com.example.resilient_api.infrastructure.entrypoints.dto.EnrollmentRequestDTO;
+import com.example.resilient_api.infrastructure.entrypoints.dto.EnrollmentResponseDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -110,6 +112,105 @@ public class BootcampWebClient {
                     })
                 .bodyToMono(String.class)
                 .doOnSuccess(result -> log.info("Successfully deleted bootcamp with messageId: {}", messageId))
+                .doOnError(ex -> log.error("Error calling bootcamp service for messageId: {}", messageId, ex))
+                .onErrorResume(ex -> {
+                    if (ex instanceof TechnicalException) {
+                        return Mono.error(ex);
+                    }
+                    log.error("Unexpected error calling bootcamp service for messageId: {}", messageId, ex);
+                    return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                });
+    }
+
+    public Mono<EnrollmentResponseDTO> enrollInBootcamp(Long bootcampId, Long userId, String messageId, String authToken) {
+        log.info("Calling bootcamp service to enroll user {} in bootcamp {} with messageId: {}", userId, bootcampId, messageId);
+
+        EnrollmentRequestDTO requestDTO = EnrollmentRequestDTO.builder()
+                .bootcampId(bootcampId)
+                .build();
+
+        return webClientBuilder.build()
+                .post()
+                .uri(bootcampBaseUrl + "/bootcamp/enroll")
+                .header(X_MESSAGE_ID, messageId)
+                .header("Authorization", authToken)
+                .header("X-User-Id", String.valueOf(userId))
+                .bodyValue(requestDTO)
+                .retrieve()
+                .onStatus(status -> status.is5xxServerError(),
+                    response -> {
+                        log.error("Bootcamp service returned 5xx error for messageId: {}", messageId);
+                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                    })
+                .onStatus(status -> status.is4xxClientError(),
+                    response -> {
+                        log.error("Bootcamp service returned 4xx error for messageId: {}", messageId);
+                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                    })
+                .bodyToMono(EnrollmentResponseDTO.class)
+                .doOnSuccess(result -> log.info("Successfully enrolled in bootcamp with messageId: {}", messageId))
+                .doOnError(ex -> log.error("Error calling bootcamp service for messageId: {}", messageId, ex))
+                .onErrorResume(ex -> {
+                    if (ex instanceof TechnicalException) {
+                        return Mono.error(ex);
+                    }
+                    log.error("Unexpected error calling bootcamp service for messageId: {}", messageId, ex);
+                    return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                });
+    }
+
+    public Mono<String> unenrollFromBootcamp(Long bootcampId, Long userId, String messageId, String authToken) {
+        log.info("Calling bootcamp service to unenroll user {} from bootcamp {} with messageId: {}", userId, bootcampId, messageId);
+
+        return webClientBuilder.build()
+                .delete()
+                .uri(bootcampBaseUrl + "/bootcamp/" + bootcampId + "/user/" + userId)
+                .header(X_MESSAGE_ID, messageId)
+                .header("Authorization", authToken)
+                .retrieve()
+                .onStatus(status -> status.is5xxServerError(),
+                    response -> {
+                        log.error("Bootcamp service returned 5xx error for messageId: {}", messageId);
+                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                    })
+                .onStatus(status -> status.is4xxClientError(),
+                    response -> {
+                        log.error("Bootcamp service returned 4xx error for messageId: {}", messageId);
+                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                    })
+                .bodyToMono(String.class)
+                .doOnSuccess(result -> log.info("Successfully unenrolled from bootcamp with messageId: {}", messageId))
+                .doOnError(ex -> log.error("Error calling bootcamp service for messageId: {}", messageId, ex))
+                .onErrorResume(ex -> {
+                    if (ex instanceof TechnicalException) {
+                        return Mono.error(ex);
+                    }
+                    log.error("Unexpected error calling bootcamp service for messageId: {}", messageId, ex);
+                    return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                });
+    }
+
+    public Mono<BootcampDTO[]> getUserBootcamps(Long userId, String messageId, String authToken) {
+        log.info("Calling bootcamp service to get bootcamps for user {} with messageId: {}", userId, messageId);
+
+        return webClientBuilder.build()
+                .get()
+                .uri(bootcampBaseUrl + "/bootcamp/user/" + userId)
+                .header(X_MESSAGE_ID, messageId)
+                .header("Authorization", authToken)
+                .retrieve()
+                .onStatus(status -> status.is5xxServerError(),
+                    response -> {
+                        log.error("Bootcamp service returned 5xx error for messageId: {}", messageId);
+                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                    })
+                .onStatus(status -> status.is4xxClientError(),
+                    response -> {
+                        log.error("Bootcamp service returned 4xx error for messageId: {}", messageId);
+                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                    })
+                .bodyToMono(BootcampDTO[].class)
+                .doOnSuccess(result -> log.info("Successfully retrieved user bootcamps with messageId: {}", messageId))
                 .doOnError(ex -> log.error("Error calling bootcamp service for messageId: {}", messageId, ex))
                 .onErrorResume(ex -> {
                     if (ex instanceof TechnicalException) {
