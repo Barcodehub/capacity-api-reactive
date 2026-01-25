@@ -1,8 +1,12 @@
 package com.example.resilient_api.infrastructure.adapters.webclient;
 
+import com.example.resilient_api.domain.enums.TechnicalMessage;
+import com.example.resilient_api.domain.exceptions.BusinessException;
 import com.example.resilient_api.domain.exceptions.TechnicalException;
 import com.example.resilient_api.infrastructure.adapters.webclient.dto.BootcampDTO;
 import com.example.resilient_api.infrastructure.adapters.webclient.dto.BootcampWithCapacitiesDTO;
+import com.example.resilient_api.infrastructure.adapters.webclient.dto.ErrorDetailDTO;
+import com.example.resilient_api.infrastructure.adapters.webclient.dto.ErrorResponseDTO;
 import com.example.resilient_api.infrastructure.adapters.webclient.dto.PageResponse;
 import com.example.resilient_api.infrastructure.entrypoints.dto.EnrollmentRequestDTO;
 import com.example.resilient_api.infrastructure.entrypoints.dto.EnrollmentResponseDTO;
@@ -12,9 +16,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
-import static com.example.resilient_api.domain.enums.TechnicalMessage.TECHNOLOGY_SERVICE_ERROR;
+import static com.example.resilient_api.domain.enums.TechnicalMessage.BOOTCAMP_SERVICE_ERROR;
 import static com.example.resilient_api.infrastructure.entrypoints.util.Constants.X_MESSAGE_ID;
 
 @Component
@@ -36,26 +41,58 @@ public class BootcampWebClient {
                 .header(X_MESSAGE_ID, messageId)
                 .bodyValue(bootcampDTO)
                 .retrieve()
-                .onStatus(status -> status.is5xxServerError(),
-                    response -> {
-                        log.error("Bootcamp service returned 5xx error for messageId: {}", messageId);
-                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
-                    })
-                .onStatus(status -> status.is4xxClientError(),
-                    response -> {
-                        log.error("Bootcamp service returned 4xx error for messageId: {}", messageId);
-                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
-                    })
                 .bodyToMono(BootcampDTO.class)
                 .doOnSuccess(result -> log.info("Successfully created bootcamp with messageId: {}", messageId))
-                .doOnError(ex -> log.error("Error calling bootcamp service for messageId: {}", messageId, ex))
+                .onErrorResume(WebClientResponseException.class, ex -> {
+                    log.error("Bootcamp service returned error {} for messageId: {}", ex.getStatusCode(), messageId);
+
+                    // Intentar parsear la respuesta de error
+                    try {
+                        ErrorResponseDTO errorResponse = ex.getResponseBodyAs(ErrorResponseDTO.class);
+                        if (errorResponse != null && errorResponse.getErrors() != null && !errorResponse.getErrors().isEmpty()) {
+                            ErrorDetailDTO firstError = errorResponse.getErrors().get(0);
+                            String errorMessage = firstError.getMessage() != null ? firstError.getMessage() : errorResponse.getMessage();
+                            log.error("Bootcamp service error detail: {}", errorMessage);
+
+                            // Si es un error 4xx, es un error de negocio
+                            if (ex.getStatusCode().is4xxClientError()) {
+                                // Crear un TechnicalMessage dinámico con el mensaje del error
+                                return Mono.error(new BusinessException(
+                                    createDynamicTechnicalMessage(errorResponse.getCode(), errorMessage, firstError.getParam())
+                                ));
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.warn("Could not parse error response from bootcamp service: {}", e.getMessage());
+                    }
+
+                    // Si no se pudo parsear o es un error 5xx, retornar error técnico genérico
+                    return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
+                })
                 .onErrorResume(ex -> {
-                    if (ex instanceof TechnicalException) {
+                    if (ex instanceof BusinessException || ex instanceof TechnicalException) {
                         return Mono.error(ex);
                     }
                     log.error("Unexpected error calling bootcamp service for messageId: {}", messageId, ex);
-                    return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                    return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                 });
+    }
+
+    private TechnicalMessage createDynamicTechnicalMessage(String code, String message, String param) {
+        // Mapear mensajes comunes del microservicio de bootcamp
+        if (message != null) {
+            if (message.contains("already exists")) {
+                return TechnicalMessage.BOOTCAMP_ALREADY_EXISTS;
+            }
+            if (message.contains("name") && message.contains("required")) {
+                return TechnicalMessage.TECHNOLOGY_NAME_REQUIRED;
+            }
+            if (message.contains("description") && message.contains("required")) {
+                return TechnicalMessage.TECHNOLOGY_DESCRIPTION_REQUIRED;
+            }
+        }
+        // Por defecto, retornar error de parámetros inválidos
+        return TechnicalMessage.INVALID_PARAMETERS;
     }
 
     public Mono<PageResponse<BootcampWithCapacitiesDTO>> listBootcamps(int page, int size, String sortBy,
@@ -73,12 +110,12 @@ public class BootcampWebClient {
                 .onStatus(status -> status.is5xxServerError(),
                     response -> {
                         log.error("Bootcamp service returned 5xx error for messageId: {}", messageId);
-                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                        return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                     })
                 .onStatus(status -> status.is4xxClientError(),
                     response -> {
                         log.error("Bootcamp service returned 4xx error for messageId: {}", messageId);
-                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                        return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                     })
                 .bodyToMono(new ParameterizedTypeReference<PageResponse<BootcampWithCapacitiesDTO>>() {})
                 .doOnSuccess(result -> log.info("Successfully listed bootcamps with messageId: {}", messageId))
@@ -88,7 +125,7 @@ public class BootcampWebClient {
                         return Mono.error(ex);
                     }
                     log.error("Unexpected error calling bootcamp service for messageId: {}", messageId, ex);
-                    return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                    return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                 });
     }
 
@@ -103,12 +140,12 @@ public class BootcampWebClient {
                 .onStatus(status -> status.is5xxServerError(),
                     response -> {
                         log.error("Bootcamp service returned 5xx error for messageId: {}", messageId);
-                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                        return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                     })
                 .onStatus(status -> status.is4xxClientError(),
                     response -> {
                         log.error("Bootcamp service returned 4xx error for messageId: {}", messageId);
-                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                        return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                     })
                 .bodyToMono(String.class)
                 .doOnSuccess(result -> log.info("Successfully deleted bootcamp with messageId: {}", messageId))
@@ -118,7 +155,7 @@ public class BootcampWebClient {
                         return Mono.error(ex);
                     }
                     log.error("Unexpected error calling bootcamp service for messageId: {}", messageId, ex);
-                    return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                    return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                 });
     }
 
@@ -140,12 +177,12 @@ public class BootcampWebClient {
                 .onStatus(status -> status.is5xxServerError(),
                     response -> {
                         log.error("Bootcamp service returned 5xx error for messageId: {}", messageId);
-                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                        return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                     })
                 .onStatus(status -> status.is4xxClientError(),
                     response -> {
                         log.error("Bootcamp service returned 4xx error for messageId: {}", messageId);
-                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                        return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                     })
                 .bodyToMono(EnrollmentResponseDTO.class)
                 .doOnSuccess(result -> log.info("Successfully enrolled in bootcamp with messageId: {}", messageId))
@@ -155,7 +192,7 @@ public class BootcampWebClient {
                         return Mono.error(ex);
                     }
                     log.error("Unexpected error calling bootcamp service for messageId: {}", messageId, ex);
-                    return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                    return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                 });
     }
 
@@ -171,12 +208,12 @@ public class BootcampWebClient {
                 .onStatus(status -> status.is5xxServerError(),
                     response -> {
                         log.error("Bootcamp service returned 5xx error for messageId: {}", messageId);
-                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                        return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                     })
                 .onStatus(status -> status.is4xxClientError(),
                     response -> {
                         log.error("Bootcamp service returned 4xx error for messageId: {}", messageId);
-                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                        return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                     })
                 .bodyToMono(String.class)
                 .doOnSuccess(result -> log.info("Successfully unenrolled from bootcamp with messageId: {}", messageId))
@@ -186,7 +223,7 @@ public class BootcampWebClient {
                         return Mono.error(ex);
                     }
                     log.error("Unexpected error calling bootcamp service for messageId: {}", messageId, ex);
-                    return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                    return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                 });
     }
 
@@ -202,12 +239,12 @@ public class BootcampWebClient {
                 .onStatus(status -> status.is5xxServerError(),
                     response -> {
                         log.error("Bootcamp service returned 5xx error for messageId: {}", messageId);
-                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                        return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                     })
                 .onStatus(status -> status.is4xxClientError(),
                     response -> {
                         log.error("Bootcamp service returned 4xx error for messageId: {}", messageId);
-                        return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                        return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                     })
                 .bodyToMono(BootcampDTO[].class)
                 .doOnSuccess(result -> log.info("Successfully retrieved user bootcamps with messageId: {}", messageId))
@@ -217,7 +254,7 @@ public class BootcampWebClient {
                         return Mono.error(ex);
                     }
                     log.error("Unexpected error calling bootcamp service for messageId: {}", messageId, ex);
-                    return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
+                    return Mono.error(new TechnicalException(BOOTCAMP_SERVICE_ERROR));
                 });
     }
 }

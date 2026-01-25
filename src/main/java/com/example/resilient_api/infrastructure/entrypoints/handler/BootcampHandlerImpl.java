@@ -1,6 +1,7 @@
 package com.example.resilient_api.infrastructure.entrypoints.handler;
 
 import com.example.resilient_api.domain.enums.TechnicalMessage;
+import com.example.resilient_api.domain.exceptions.BusinessException;
 import com.example.resilient_api.domain.exceptions.TechnicalException;
 import com.example.resilient_api.infrastructure.adapters.webclient.BootcampWebClient;
 import com.example.resilient_api.infrastructure.adapters.webclient.dto.BootcampDTO;
@@ -39,6 +40,7 @@ public class BootcampHandlerImpl {
                         .bodyValue("Bootcamp created successfully"))
                 .contextWrite(Context.of(X_MESSAGE_ID, messageId))
                 .doOnError(ex -> log.error("Error creating bootcamp for messageId: {}", messageId, ex))
+                .onErrorResume(BusinessException.class, ex -> handleBusinessException(ex, messageId))
                 .onErrorResume(TechnicalException.class, ex -> handleTechnicalException(ex, messageId))
                 .onErrorResume(ex -> handleUnexpectedException(ex, messageId));
     }
@@ -65,6 +67,7 @@ public class BootcampHandlerImpl {
                 .contextWrite(Context.of(X_MESSAGE_ID, messageId))
                 .doOnSuccess(response -> log.info("Bootcamps listed successfully with messageId: {}", messageId))
                 .doOnError(ex -> log.error("Error listing bootcamps for messageId: {}", messageId, ex))
+                .onErrorResume(BusinessException.class, ex -> handleBusinessException(ex, messageId))
                 .onErrorResume(TechnicalException.class, ex -> handleTechnicalException(ex, messageId))
                 .onErrorResume(ex -> handleUnexpectedException(ex, messageId));
     }
@@ -79,8 +82,18 @@ public class BootcampHandlerImpl {
                         .bodyValue(result))
                 .contextWrite(Context.of(X_MESSAGE_ID, messageId))
                 .doOnError(ex -> log.error("Error deleting bootcamp for messageId: {}", messageId, ex))
+                .onErrorResume(BusinessException.class, ex -> handleBusinessException(ex, messageId))
                 .onErrorResume(TechnicalException.class, ex -> handleTechnicalException(ex, messageId))
                 .onErrorResume(ex -> handleUnexpectedException(ex, messageId));
+    }
+
+    private Mono<ServerResponse> handleBusinessException(BusinessException ex, String messageId) {
+        log.warn("Business exception for messageId {}: {}", messageId, ex.getMessage());
+        return buildErrorResponse(
+                HttpStatus.BAD_REQUEST,
+                messageId,
+                TechnicalMessage.INVALID_PARAMETERS,
+                List.of(buildErrorDTO(ex.getTechnicalMessage())));
     }
 
     private Mono<ServerResponse> handleTechnicalException(TechnicalException ex, String messageId) {

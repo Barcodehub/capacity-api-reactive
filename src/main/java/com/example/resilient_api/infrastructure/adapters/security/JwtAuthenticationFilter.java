@@ -28,39 +28,46 @@ public class JwtAuthenticationFilter implements WebFilter {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String path = exchange.getRequest().getURI().getPath();
+        String method = exchange.getRequest().getMethod().toString();
 
-        // Skip authentication for public endpoints
-        if (isPublicEndpoint(path)) {
-            return chain.filter(exchange);
-        }
+        log.info("JWT Filter - Processing request: {} {}", method, path);
 
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        log.info("JWT Filter - Authorization header: {}", authHeader != null ? "Present" : "Missing");
 
+        // Si NO hay token, continuar sin autenticación
+        // Spring Security decidirá si el endpoint requiere autenticación
         if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
+            log.info("JWT Filter - No Bearer token found, continuing without authentication (Spring Security will handle authorization)");
             return chain.filter(exchange);
         }
 
+        // Si HAY token, validarlo y asignar rol
         String token = authHeader.substring(BEARER_PREFIX.length());
+        log.info("JWT Filter - Validating JWT token");
 
         return jwtPort.validateAndExtractPayload(token)
-                .flatMap(payload -> authenticateUser(payload, exchange, chain))
+                .flatMap(payload -> {
+                    log.info("JWT Filter - Token validated successfully for user: {} (admin: {})",
+                            payload.email(), payload.isAdmin());
+                    return authenticateUser(payload, exchange, chain);
+                })
                 .onErrorResume(ex -> {
-                    log.error("Error validating JWT token: {}", ex.getMessage());
+                    log.error("JWT Filter - Error validating JWT token: {}", ex.getMessage(), ex);
+                    // Si el token es inválido, continuar sin autenticación
+                    // Spring Security retornará 401 si el endpoint requiere autenticación
                     return chain.filter(exchange);
                 });
     }
 
-    private boolean isPublicEndpoint(String path) {
-        // Endpoints públicos (no requieren autenticación)
-        return !path.contains("/enroll") && !path.contains("/unenroll") && !path.contains("/my-bootcamps")
-                || path.startsWith("/actuator");
-    }
-
     private Mono<Void> authenticateUser(JwtPayload payload, ServerWebExchange exchange, WebFilterChain chain) {
         // Asignar rol basado en isAdmin
+        String role = Boolean.TRUE.equals(payload.isAdmin()) ? "ROLE_ADMIN" : "ROLE_USER";
         List<SimpleGrantedAuthority> authorities = Collections.singletonList(
-                new SimpleGrantedAuthority(Boolean.TRUE.equals(payload.isAdmin()) ? "ROLE_ADMIN" : "ROLE_USER")
+                new SimpleGrantedAuthority(role)
         );
+
+        log.info("JWT Filter - Assigned role: {} for user: {}", role, payload.email());
 
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(payload, null, authorities);

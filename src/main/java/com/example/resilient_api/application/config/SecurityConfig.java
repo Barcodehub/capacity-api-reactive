@@ -24,11 +24,38 @@ public class SecurityConfig {
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(exchanges -> exchanges
-                        // Endpoints de enrollment requieren autenticación (validado por JwtAuthenticationFilter)
-                        .pathMatchers("/capacity/bootcamp/enroll").authenticated()
-                        .pathMatchers("/capacity/bootcamp/*/unenroll").authenticated()
-                        .pathMatchers("/capacity/bootcamp/my-bootcamps").authenticated()
-                        // Todos los demás son públicos
+                        // Actuator - público
+                        .pathMatchers("/actuator/**").permitAll()
+
+                        // ===== ENDPOINTS PÚBLICOS (sin autenticación) =====
+                        // Verificar existencia de capacidades
+                        .pathMatchers(HttpMethod.POST, "/capacity/check-exists").permitAll()
+                        // Obtener capacidades con tecnologías
+                        .pathMatchers(HttpMethod.POST, "/capacity/with-technologies").permitAll()
+
+                        // ===== ENDPOINTS ADMIN (solo isAdmin = true) =====
+                        // Listar capacidades
+                        .pathMatchers(HttpMethod.GET, "/capacity").hasRole("ADMIN")
+                        // Listar bootcamps
+                        .pathMatchers(HttpMethod.GET, "/capacity/bootcamp").hasRole("ADMIN")
+                        // Crear capacidad
+                        .pathMatchers(HttpMethod.POST, "/capacity").hasRole("ADMIN")
+                        // Crear bootcamp
+                        .pathMatchers(HttpMethod.POST, "/capacity/bootcamp").hasRole("ADMIN")
+                        // Eliminar bootcamp
+                        .pathMatchers(HttpMethod.DELETE, "/capacity/bootcamp/**").hasRole("ADMIN")
+                        // Eliminar capacidades por IDs
+                        .pathMatchers(HttpMethod.POST, "/capacity/delete-by-ids").hasRole("ADMIN")
+
+                        // ===== ENDPOINTS USER (solo isAdmin = false) =====
+                        // Inscribirse en bootcamp
+                        .pathMatchers(HttpMethod.POST, "/capacity/bootcamp/enroll").hasRole("USER")
+                        // Desinscribirse de bootcamp
+                        .pathMatchers(HttpMethod.DELETE, "/capacity/bootcamp/*/unenroll").hasRole("USER")
+                        // Ver mis bootcamps
+                        .pathMatchers(HttpMethod.GET, "/capacity/bootcamp/my-bootcamps").hasRole("USER")
+
+                        // Por defecto: permitir todo lo demás (para endpoints no especificados)
                         .anyExchange().permitAll()
                 )
                 .addFilterAt(jwtAuthenticationFilter, SecurityWebFiltersOrder.AUTHENTICATION)

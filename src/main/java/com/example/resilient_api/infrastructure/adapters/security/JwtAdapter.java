@@ -32,6 +32,9 @@ public class JwtAdapter implements JwtPort {
     public Mono<JwtPayload> validateAndExtractPayload(String token) {
         return Mono.fromCallable(() -> {
             try {
+                log.info("JwtAdapter - Starting token validation");
+                log.debug("JwtAdapter - Token: {}", token.substring(0, Math.min(20, token.length())) + "...");
+
                 Claims claims = Jwts.parser()
                         .verifyWith(secretKey)
                         .build()
@@ -42,15 +45,18 @@ public class JwtAdapter implements JwtPort {
                 String email = claims.getSubject();
                 Boolean isAdmin = claims.get("isAdmin", Boolean.class);
 
+                log.info("JwtAdapter - Token validated successfully for userId: {}, email: {}, isAdmin: {}",
+                        userId, email, isAdmin);
+
                 return new JwtPayload(userId, email, isAdmin);
             } catch (ExpiredJwtException ex) {
-                log.error("Token expired: {}", ex.getMessage());
+                log.error("JwtAdapter - Token expired: {}", ex.getMessage());
                 throw new BusinessException(TechnicalMessage.TOKEN_EXPIRED);
             } catch (SignatureException | MalformedJwtException ex) {
-                log.error("Invalid token: {}", ex.getMessage());
+                log.error("JwtAdapter - Invalid token signature or format: {}", ex.getMessage());
                 throw new BusinessException(TechnicalMessage.TOKEN_INVALID);
             } catch (Exception ex) {
-                log.error("Error validating token: {}", ex.getMessage());
+                log.error("JwtAdapter - Unexpected error validating token: {}", ex.getMessage(), ex);
                 throw new BusinessException(TechnicalMessage.TOKEN_INVALID);
             }
         });
