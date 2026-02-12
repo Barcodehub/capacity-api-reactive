@@ -27,6 +27,9 @@ public class SecurityConfig {
                         // Actuator - público
                         .pathMatchers("/actuator/**").permitAll()
 
+                        // Swagger/OpenAPI - público
+                        .pathMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/webjars/**").permitAll()
+
                         // ===== ENDPOINTS PÚBLICOS (sin autenticación) =====
                         // Verificar existencia de capacidades
                         .pathMatchers(HttpMethod.POST, "/capacity/check-exists").permitAll()

@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
@@ -38,18 +39,18 @@ public class TechnologyWebClient {
                 .header(X_MESSAGE_ID, messageId)
                 .bodyValue(new TechnologyIdsRequest(technologyIds))
                 .retrieve()
-                .onStatus(status -> status.is5xxServerError(),
+                .onStatus(HttpStatusCode::is5xxServerError,
                     response -> {
                         log.error("Technology service returned 5xx error for messageId: {}", messageId);
                         return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
                     })
-                .onStatus(status -> status.is4xxClientError(),
+                .onStatus(HttpStatusCode::is4xxClientError,
                     response -> {
                         log.error("Technology service returned 4xx error for messageId: {}", messageId);
                         return Mono.error(new TechnicalException(TECHNOLOGY_SERVICE_ERROR));
                     })
                 .bodyToMono(Map.class)
-                .cast(Map.class)
+                .cast(Map.class) //tratar de usar dto en lugar del map
                 .map(map -> (Map<Long, Boolean>) map)
                 .doOnSuccess(result -> log.info("Successfully received response from technology service with messageId: {}", messageId))
                 .doOnError(ex -> log.error("Error calling technology service for messageId: {}", messageId, ex))

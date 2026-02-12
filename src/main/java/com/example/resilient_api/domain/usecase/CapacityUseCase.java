@@ -37,8 +37,8 @@ public class CapacityUseCase implements CapacityServicePort {
     public Mono<Capacity> registerCapacity(Capacity capacity, String messageId) {
         return validateCapacity(capacity)
                 .then(validateTechnologies(capacity.technologyIds()))
-                .then(checkTechnologiesExistInExternalService(capacity.technologyIds(), messageId))
-                .then(capacityPersistencePort.existByName(capacity.name()))
+               .then(Mono.defer(() -> checkTechnologiesExistInExternalService(capacity.technologyIds(), messageId)))
+                .then(Mono.defer(() -> capacityPersistencePort.existByName(capacity.name())))
                 .filter(exists -> !exists)
                 .switchIfEmpty(Mono.error(new BusinessException(TechnicalMessage.TECHNOLOGY_ALREADY_EXISTS)))
                 .flatMap(exists -> capacityPersistencePort.save(capacity));

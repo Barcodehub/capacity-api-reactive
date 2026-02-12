@@ -223,6 +223,9 @@ public class CapacityHandlerImpl {
     }
 
     private String getMessageId(ServerRequest serverRequest) {
-        return serverRequest.headers().firstHeader(X_MESSAGE_ID);
+        String messageId = serverRequest.headers().firstHeader(X_MESSAGE_ID);
+        return messageId != null && !messageId.isEmpty()
+                ? messageId
+                : java.util.UUID.randomUUID().toString();
     }
 }
